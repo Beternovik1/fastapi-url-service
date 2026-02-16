@@ -1,0 +1,16 @@
+# Ignore git
+.git
+.gitignore
+
+# Ignore Dependencies (CRITICAL!)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Ignore Build Artifacts (Don't copy old builds)
+dist
+build
+
+# Ignore Secrets
+.env
+.env.example
