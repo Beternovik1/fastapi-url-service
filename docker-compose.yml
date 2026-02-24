@@ -1,0 +1,84 @@
+version: '3.8'
+
+# 1. DEFINICIÓN DE REDES
+# Creamos dos mundos separados: uno público y uno privado.
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge 
+
+services:
+  # BASE DE DATOS (Zona Segura)
+  mongo:
+    image: mongo:6.0
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - backend-net  # solo vive en la red privada
+
+  # BACKEND intermediario
+  backend:
+    container_name: backend_container
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Docker resuelve mongo como IP porque comparten la red 'backend-net'
+      MONGO_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017
+    networks:
+      - frontend-net  # Habla con el Frontend
+      - backend-net   # Habla con la Base de Datos
+    depends_on:
+      - mongo
+    volumes:
+      # HOT RELOAD: Conecta la carpeta local con el contenedor
+      # Ajuste: Mapeamos la carpeta 'app' interna.
+      - ./backend/app:/app/app 
+
+  # FRONTEND zona publica
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      # como React corre en el navegador del usuario, usa localhost, no el nombre del contenedor
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app           # sincroniza el codigo
+      - /app/node_modules         # protege las dependencias de Linux
+    networks:
+      - frontend-net  # no tiene acceso a la red de datos (backend-net)
+    depends_on:
+      - backend
+
+  # Mongo Express
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    networks:
+      - backend-net   # Necesita ver a la BD
+      - frontend-net  # Lo ponemos aquí para que sea accesible "públicamente"
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:
+    driver: local
