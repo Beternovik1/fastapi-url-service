@@ -3,19 +3,18 @@
 
 echo "[Container] Starting Application Hardening..."
 
-# 1. File Permissions (The Principle of Least Privilege)
-# We make sure the code is Read-Only. 
-# If a hacker breaks in, they can't edit your code to add a backdoor.
-chmod -R 555 /app/app
+# 1. File Permissions (A prueba de fallos)
+# El "|| echo..." significa: Si fallas, NO mates el servidor, solo imprime un aviso.
+echo "   -> Setting permissions on /app/app..."
+chmod -R 755 /app/app 2>/dev/null || echo "WARNING: Could not chmod /app/app (Likely due to Docker Volumes). Skipping."
 
-# 2. Lock down the .env file (if it exists inside)
+# 2. Lock down .env (A prueba de fallos)
 if [ -f "/app/.env" ]; then
-    chmod 400 /app/.env
-    echo ".env file locked."
+    echo "   -> Locking .env file..."
+    chmod 400 /app/.env 2>/dev/null || echo "WARNING: Could not lock .env (Volume mounted?). Skipping."
 fi
 
-# 3. Network Hardening (Optional but cool)
-# We can't use UFW, but we can verify we aren't running as root
+# 3. Check for Root (Esto sí debe fallar si es inseguro)
 if [ "$(id -u)" -eq 0 ]; then
     echo "ERROR: Container is running as ROOT! Aborting."
     exit 1
@@ -23,7 +22,5 @@ fi
 
 echo "Container Hardening Complete. Launching App..."
 
-# 4. Pass control to the CMD (Launch Python)
-# This 'exec' is important: it replaces the shell with Python, 
-# so Python becomes PID 1 (handles signals correctly).
+# 4. Launch Python
 exec "$@"

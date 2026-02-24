@@ -11,22 +11,23 @@ from slowapi.errors import RateLimitExceeded
 # Mis módulos
 from app.core.config import settings
 from app.db.database import connect_to_mongo, close_mongo_connection, get_database
-from app.routers import url_router  # Importamos el archivo url_router.py
+from app.routers import url_router
 
-# Uses the user's IP address to track how many requests they make
+# 1. Crear el Limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# tell FastAPI to use the Limiter
+# 2. CREAR LA APP (¡ESTO VA PRIMERO!)
+app = FastAPI(title="TinyURL Clone API")
+
+# 3. AHORA SÍ, configurar el Limiter en la App (porque app ya existe)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-app = FastAPI(title="TinyURL Clone API")
-
-# --- 1. CONFIGURACIÓN DE CORS (Para React) ---
+# --- CONFIGURACIÓN DE CORS ---
 origins = [
-    "http://localhost:5173",  # Frontend Local
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "*"                       # Permitir todo (Docker/Dev)
+    "*"
 ]
 
 app.add_middleware(
@@ -37,33 +38,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 2. EVENTOS DE BASE DE DATOS ---
+# --- EVENTOS DE BASE DE DATOS ---
 app.add_event_handler("startup", connect_to_mongo)
 app.add_event_handler("shutdown", close_mongo_connection)
 
-# --- 3. INCLUIR RUTAS (POST /shorten, POST /retrieve) ---
-# Usamos url_router.router porque en url_router.py definiste "router = APIRouter()"
+# --- RUTAS ---
 app.include_router(url_router.router, prefix="/api/v1", tags=["URLs"])
 
-# --- 4. RUTA DE REDIRECCIÓN (GET /{short_id}) ---
+# --- REDIRECCIÓN ---
 @app.get("/{short_id}")
 async def redirect_url(
     short_id: str, 
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     collection = db["urls"]
-    
-    # Buscamos el link usando el short_id
     url_doc = await collection.find_one({"short_id": short_id})
 
-    # Si no existe, error 404
     if not url_doc:
         raise HTTPException(status_code=404, detail="URL not found")
 
-    # Si existe, redirigimos a la URL larga original
     return RedirectResponse(url=url_doc["long_url"])
 
-# Health Check (Opcional)
+# Health Check
 @app.get("/")
 def health_check():
     return {"status": "ok", "app_name": settings.DB_NAME}

@@ -1,23 +1,18 @@
-# Ignore git history (massive)
 .git
 .gitignore
 
-# Ignore Python cache
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 
-# Ignore Virtual Env (CRITICAL!)
 .venv
 venv
 env
 
-# Ignore Secrets (Safety net)
 .env
 .env.example
 
-# Ignore Dev Tools
 requirements-dev.txt
 pytest_cache
 .pytest_cache
